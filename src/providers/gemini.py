@@ -4,6 +4,7 @@ import re
 from typing import Any
 
 from src.councils.types import CouncilMember, CouncilContext, MemberOpinion, CouncilVerdict
+from src.introspection.query_phoenix import fallback_improvement_directives
 
 
 def _json_from_text(text: str) -> dict[str, Any]:
@@ -66,6 +67,56 @@ def _generate_json(prompt: str) -> dict[str, Any] | None:
     response = client.models.generate_content(model=model, contents=prompt)
     return _clean_markdown(_json_from_text(response.text or "{}"))
 
+def generate_improvement_directives(context: CouncilContext, raw_insight: str) -> list[str]:
+    prompt = f"""
+You are an AI quality coach for a multi-agent business decision council.
+
+Your job is not to answer the business question.
+Your job is to convert observability and eval findings into run-specific instructions
+that will make the next council output more useful.
+
+Current decision context:
+Business: {context.business_name or "Unknown"}
+Question: {context.decision_question}
+Background: {context.background or ""}
+Constraints: {context.constraints}
+Known facts: {context.known_facts}
+
+Observed eval/trace insight:
+{raw_insight}
+
+Generate 3 to 5 improvement directives for THIS run.
+
+Rules:
+- Be specific to the business and decision context.
+- Do not give generic AI best practices.
+- Do not answer the decision directly.
+- Directives should improve the next answer, not sound like a policy memo.
+- For local service businesses, force the council to talk in plain owner language.
+- Prefer words like calls, quotes, jobs, crews, office staff, scheduling, callbacks, customer promises, and owner approval.
+- Avoid terms like agentic commerce, robust, phased approach, operational efficiency, revenue uplift, transactional flows, stakeholder, governance, and transformation.
+- If the business has not provided metrics, budget, staff capacity, or customer data, tell the council to keep confidence at 80 or below.
+- Do not use Markdown formatting.
+- Do not use asterisks, headings, bullet characters, or numbered lists inside JSON strings.
+- Prefer plain business language over consultant language.
+- Each directive should tell the council how to improve its reasoning or answer style.
+
+Return strict JSON only with this shape:
+{{
+  "directives": [
+    "specific directive for this run"
+  ]
+}}
+"""
+    data = _generate_json(prompt)
+    if data is None:
+        return fallback_improvement_directives(context, raw_insight)
+
+    directives = data.get("directives")
+    if not isinstance(directives, list) or not directives:
+        return fallback_improvement_directives(context, raw_insight)
+
+    return [str(item).strip() for item in directives if str(item).strip()][:5]
 
 def _fallback_opinion(member: CouncilMember, context: CouncilContext, round_name: str) -> MemberOpinion:
     conditional = member.id in {"risk", "customer_trust", "legal_risk", "security"}
@@ -96,7 +147,14 @@ def _fallback_opinion(member: CouncilMember, context: CouncilContext, round_name
     )
 
 
-def run_member_opinion(member: CouncilMember, context: CouncilContext, round_name: str, peer_summary: str | None = None) -> MemberOpinion:
+def run_member_opinion(
+    member: CouncilMember,
+    context: CouncilContext,
+    round_name: str,
+    peer_summary: str | None = None,
+    improvement_directives: list[str] | None = None,
+) -> MemberOpinion:
+    directive_blob = "\n".join(f"- {directive}" for directive in (improvement_directives or []))
     prompt = f"""
 You are {member.name}, role: {member.role}.
 Mandate: {member.mandate}
@@ -110,6 +168,9 @@ Known facts: {context.known_facts}
 
 Round: {round_name}
 Peer summary, if any: {peer_summary or "No peer summary for this round."}
+
+Improvement directives for this run:
+{directive_blob or "No generated directives for this run."}
 Return plain text JSON string values only. Do not use Markdown. Do not use asterisks, double asterisks, headings, bullet characters, numbered lists, colons used as headings, or decorative formatting inside JSON string values.
 
 Return strict JSON only with this shape:
@@ -130,16 +191,37 @@ Return strict JSON only with this shape:
     return MemberOpinion(**data)
 
 
-def synthesize_verdict(context: CouncilContext, opinions: list[MemberOpinion], improvement_note: str) -> CouncilVerdict:
+def synthesize_verdict(
+    context: CouncilContext,
+    opinions: list[MemberOpinion],
+    improvement_note: str,
+    improvement_directives: list[str] | None = None,
+) -> CouncilVerdict:
     opinion_blob = "\n".join(
         f"- {o.member_name}: {o.stance}, confidence {o.confidence}. {o.reasoning}" for o in opinions
     )
+    directive_blob = "\n".join(f"- {directive}" for directive in (improvement_directives or []))
+
     prompt = f"""
 You are the Decision Council synthesizer.
 
 Decision: {context.decision_question}
 Business: {context.business_name or "Unknown"}
 Self-improvement instruction from prior observability/evals: {improvement_note}
+
+Generated improvement directives to apply in this synthesis:
+{directive_blob or "No generated directives for this run."}
+
+Final verdict style requirements:
+- Write like you are advising the owner of this business directly.
+- Use plain English.
+- Do not use the phrase agentic commerce.
+- Do not use the word robust.
+- Avoid quarter-based timelines unless the user gave actual dates.
+- Use immediate timeframes like this week, next 14 days, first 25 calls, first 10 quote requests.
+- Keep confidence at 80 or below unless the business gave concrete metrics, budget, staffing, or customer data.
+- Make the recommendation practical enough that the owner knows what to do next.
+- Prefer business-specific examples over abstract strategy language.
 
 Council opinions:
 {opinion_blob}

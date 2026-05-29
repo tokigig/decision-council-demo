@@ -51,3 +51,4 @@ class CouncilRunResult(BaseModel):
     verdict: CouncilVerdict
     eval: VerdictEval
     self_improvement_note: str
+    applied_improvement_directives: list[str] = Field(default_factory=list)

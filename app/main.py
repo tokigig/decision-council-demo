@@ -250,6 +250,12 @@ def run_form(
 </section>
 
 <section class="panel" style="margin-top:18px;">
+  <h2>Applied improvements this run</h2>
+  <p>The council generated these process adjustments before answering:</p>
+  <ul class="list">{_list(result.applied_improvement_directives)}</ul>
+</section>
+
+<section class="panel" style="margin-top:18px;">
   <h2>Self-improvement note</h2>
   <p>{_h(result.self_improvement_note)}</p>
 </section>
