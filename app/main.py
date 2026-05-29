@@ -49,8 +49,65 @@ def _layout(body: str) -> str:
     .badge {{ display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:5px 10px; color:var(--accent); font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }}
     .list {{ margin:10px 0 0; padding-left:20px; color:var(--muted); line-height:1.55; }}
     .verdict {{ border-color: rgba(94,234,212,.55); background:linear-gradient(180deg, rgba(94,234,212,.12), rgba(17,29,47,.84)); }}
+    .verdict-title {{ font-size: clamp(24px, 3vw, 34px); line-height: 1.18; margin: 12px 0 14px; }}
     .trace {{ color:#bfdbfe; }}
     .small {{ font-size:13px; }}
+        details.advisor {{
+      background: rgba(8,17,31,.72);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 0;
+      overflow: hidden;
+    }}
+
+    details.advisor summary {{
+      cursor: pointer;
+      list-style: none;
+      padding: 18px;
+    }}
+
+    details.advisor summary::-webkit-details-marker {{
+      display: none;
+    }}
+
+    .advisor-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+    }}
+
+    .advisor-title {{
+      margin-top: 10px;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--text);
+    }}
+
+    .advisor-summary {{
+      margin: 8px 0 0;
+      color: var(--muted);
+    }}
+
+    .advisor-body {{
+      border-top: 1px solid var(--line);
+      padding: 18px;
+    }}
+
+    .chevron {{
+      color: var(--accent);
+      font-weight: 900;
+      white-space: nowrap;
+      margin-top: 6px;
+    }}
+
+    details.advisor[open] .chevron::after {{
+      content: "Hide details";
+    }}
+
+    details.advisor:not([open]) .chevron::after {{
+      content: "Show details";
+    }}
 
     .loading {{
       position: fixed;
@@ -189,18 +246,37 @@ def index() -> str:
     return _layout(body)
 
 
+def _shorten(text: str, max_chars: int = 220) -> str:
+    text = " ".join(str(text).split())
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1].rstrip() + "…"
+
+
 def _opinion_card(opinion) -> str:
     risks = "".join(f"<li>{_h(risk)}</li>" for risk in opinion.risks)
     actions = "".join(f"<li>{_h(action)}</li>" for action in opinion.recommended_actions)
+    summary = _shorten(opinion.reasoning)
 
     return f"""
-<div class="card">
-  <span class="badge">{_h(opinion.stance)} · {_h(opinion.confidence)}%</span>
-  <h3>{_h(opinion.member_name)}</h3>
-  <p>{_h(opinion.reasoning)}</p>
-  <strong>Risks</strong><ul class="list">{risks}</ul>
-  <strong>Actions</strong><ul class="list">{actions}</ul>
-</div>
+<details class="advisor">
+  <summary>
+    <div class="advisor-head">
+      <div>
+        <span class="badge">{_h(opinion.stance)} · {_h(opinion.confidence)}%</span>
+        <div class="advisor-title">{_h(opinion.member_name)}</div>
+        <p class="advisor-summary">{_h(summary)}</p>
+      </div>
+      <span class="chevron"></span>
+    </div>
+  </summary>
+
+  <div class="advisor-body">
+    <p>{_h(opinion.reasoning)}</p>
+    <strong>Risks</strong><ul class="list">{risks}</ul>
+    <strong>Actions</strong><ul class="list">{actions}</ul>
+  </div>
+</details>
 """
 
 
@@ -237,7 +313,7 @@ def run_form(
 
 <section class="panel verdict" style="margin-top:18px;">
   <span class="badge">Verdict · {_h(verdict.confidence)}% confidence</span>
-  <h1 style="font-size:46px;">{_h(verdict.recommendation)}</h1>
+  <h2 class="verdict-title">{_h(verdict.recommendation)}</h2>
   <p>{_h(verdict.summary)}</p>
   <p class="trace">Trace/session id: {_h(result.run_id)}</p>
 </section>
@@ -261,6 +337,7 @@ def run_form(
 </section>
 
 <h2 style="margin-top:28px;">Challenge round advisor positions</h2>
+<p>Each advisor summary is collapsed so the verdict stays readable. Expand any advisor to inspect their reasoning, risks, and recommended actions.</p>
 <section class="grid">{cards}</section>
 """
     return _layout(body)
