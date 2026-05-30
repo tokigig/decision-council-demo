@@ -1,5 +1,5 @@
+import os
 from html import escape
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -18,6 +18,52 @@ app = FastAPI(title="Decision Council", version="0.1.0")
 def _h(value: object) -> str:
     return escape(str(value), quote=True)
 
+def _h(value: object) -> str:
+    return escape(str(value), quote=True)
+
+
+def _enabled(value: str | None) -> bool:
+    return str(value or "").lower() == "true"
+
+
+def _integration_status_panel() -> str:
+    gemini_vertex = _enabled(os.getenv("GOOGLE_GENAI_USE_VERTEXAI"))
+    gemini_key = bool(os.getenv("GEMINI_API_KEY"))
+    phoenix_tracing = _enabled(os.getenv("ENABLE_PHOENIX_TRACING"))
+    phoenix_mcp = _enabled(os.getenv("ENABLE_PHOENIX_MCP"))
+    phoenix_project = os.getenv("PHOENIX_PROJECT_NAME", "decision-council-demo")
+
+    gemini_status = "Vertex/ADC" if gemini_vertex else "API key" if gemini_key else "fallback mode"
+    tracing_status = "enabled" if phoenix_tracing else "disabled"
+    mcp_status = "enabled" if phoenix_mcp else "configured path available"
+
+    return f"""
+<section class="panel" style="margin-top:18px;">
+  <h2>Integration status</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="badge">Google</span>
+      <h3>Gemini</h3>
+      <p>{_h(gemini_status)}</p>
+    </div>
+    <div class="card">
+      <span class="badge">Arize</span>
+      <h3>Phoenix tracing</h3>
+      <p>{_h(tracing_status)} · project {_h(phoenix_project)}</p>
+    </div>
+    <div class="card">
+      <span class="badge">MCP</span>
+      <h3>Phoenix MCP</h3>
+      <p>{_h(mcp_status)}</p>
+    </div>
+    <div class="card">
+      <span class="badge">Runtime</span>
+      <h3>Code-owned agent</h3>
+      <p>FastAPI council runtime with Gemini advisor rounds, synthesis, evals, and trace spans.</p>
+    </div>
+  </div>
+</section>
+"""
 
 def _layout(body: str) -> str:
     return f"""
@@ -201,6 +247,7 @@ def index() -> str:
     <p class="small">Uses Gemini through Google Cloud ADC/Vertex when configured. Falls back to deterministic demo mode only when Gemini is unavailable. Add Phoenix credentials for live tracing.</p>
   </form>
 </section>
+""" + _integration_status_panel() + """
 
 <div id="loading" class="loading hidden" aria-live="polite">
   <div class="loading-card">
@@ -336,8 +383,9 @@ def run_form(
   <p>{_h(result.self_improvement_note)}</p>
 </section>
 
+{_integration_status_panel()}
+
 <h2 style="margin-top:28px;">Challenge round advisor positions</h2>
-<p>Each advisor summary is collapsed so the verdict stays readable. Expand any advisor to inspect their reasoning, risks, and recommended actions.</p>
 <section class="grid">{cards}</section>
 """
     return _layout(body)
