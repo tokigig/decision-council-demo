@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: decision-council-demo
-          image: us-central1-docker.pkg.dev/decision-council-demo/decision-council/decision-council-demo:v1
+          image: us-central1-docker.pkg.dev/decision-council-demo/decision-council/decision-council-demo:v2
           ports:
             - containerPort: 8080
           env:
