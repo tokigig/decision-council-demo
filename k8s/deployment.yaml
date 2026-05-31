@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: decision-council-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: decision-council-demo
+  template:
+    metadata:
+      labels:
+        app: decision-council-demo
+    spec:
+      containers:
+        - name: decision-council-demo
+          image: us-central1-docker.pkg.dev/decision-council-demo/decision-council/decision-council-demo:v1
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "true"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "decision-council-demo"
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "us-central1"
+            - name: GEMINI_MODEL
+              value: "gemini-2.5-flash"
+            - name: ENABLE_PHOENIX_TRACING
+              value: "true"
+            - name: PHOENIX_COLLECTOR_ENDPOINT
+              value: "https://app.phoenix.arize.com/s/mike8254"
+            - name: PHOENIX_PROJECT_NAME
+              value: "decision-council-demo"
+            - name: ENABLE_PHOENIX_MCP
+              value: "false"
+            - name: PHOENIX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: decision-council-secrets
+                  key: PHOENIX_API_KEY
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: decision-council-demo
+spec:
+  type: LoadBalancer
+  selector:
+    app: decision-council-demo
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
