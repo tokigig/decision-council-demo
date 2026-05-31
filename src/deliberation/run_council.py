@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from src.councils.presets import get_preset
-from src.councils.types import CouncilContext, CouncilRunResult
+from src.councils.types import CouncilContext, CouncilMember, CouncilRunResult
 from src.evals.evaluate_verdict import evaluate_verdict
 from src.introspection.query_phoenix import get_self_improvement_note
 from src.providers.gemini import (
@@ -19,9 +19,16 @@ def _summarize_opinions(opinions) -> str:
     )
 
 
-def run_council(preset_id: str, context: CouncilContext) -> CouncilRunResult:
+def run_council(
+    preset_id: str,
+    context: CouncilContext,
+    extra_members: list[CouncilMember] | None = None,
+) -> CouncilRunResult:
     run_id = str(uuid4())
     members = get_preset(preset_id)
+
+    if extra_members:
+        members = members + extra_members
 
     raw_improvement_note = get_self_improvement_note()
     improvement_directives = generate_improvement_directives(context, raw_improvement_note)
@@ -33,6 +40,7 @@ def run_council(preset_id: str, context: CouncilContext) -> CouncilRunResult:
             "councilPresetId": preset_id,
             "business": context.business_name,
             "improvementDirectiveCount": len(improvement_directives),
+            "memberCount": len(members),
         },
     ):
         independent = []
